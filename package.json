@@ -1,0 +1,13 @@
+{
+  "name": "wx",
+  "version": "0.1.0",
+  "description": "Local WeChat data CLI for macOS (SQLCipher 4, WeChat 4.x)",
+  "type": "module",
+  "bin": { "wx": "./src/main.ts" },
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "test": "bun test"
+  },
+  "engines": { "bun": ">=1.2" },
+  "license": "MIT"
+}

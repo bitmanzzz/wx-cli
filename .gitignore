@@ -1,0 +1,14 @@
+# 忽略：依赖与构建产物
+node_modules/
+dist/
+*.log
+
+# 忽略：本机隐私产物（正确位置在 ~/.wx-cli，这里只是兜底）
+keys.json
+capture.log
+imagekey.json
+watch-state.json
+cache/
+
+# 忽略：系统文件
+.DS_Store
