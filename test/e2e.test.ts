@@ -11,6 +11,9 @@ import { listContacts, listMembers, listSessions } from "../src/cli/lists.ts";
 import { chatStats, listMessages, searchMessages } from "../src/cli/messages.ts";
 import { exportChat } from "../src/cli/export.ts";
 import { extractAttachment, listAttachments } from "../src/cli/media.ts";
+import { timeline } from "../src/cli/timeline.ts";
+import { pollOnce, readSessions } from "../src/cli/watch.ts";
+import { extractVoice, listVoice } from "../src/cli/voice.ts";
 import { parseGroupNicknameMap } from "../src/core/names.ts";
 
 const ROOT = join(tmpdir(), `wx-e2e-${process.pid}`);
@@ -54,7 +57,7 @@ beforeAll(() => {
       username TEXT, unread_count INTEGER, summary BLOB, last_timestamp INTEGER,
       last_msg_type INTEGER, last_msg_sender TEXT, last_sender_display_name TEXT)`);
     const insert = db.prepare("INSERT INTO SessionTable VALUES (?,?,?,?,?,?,?)");
-    insert.run(GROUP, 2, `:${ALICE}:\n大家好`, 1700000000, 1, ALICE, "小艾");
+    insert.run(GROUP, 2, `:${ALICE}:\n大家好`, 1700000300, 49, BOB, "老王");
     insert.run(BOB, 0, "在吗", 1700000100, 1, BOB, "老王");
   });
 
@@ -94,6 +97,14 @@ beforeAll(() => {
     db.run("INSERT INTO name2id VALUES (1, ?)", [GROUP]);
     db.run("CREATE TABLE message_fts_v4_0_content (c0 TEXT, c1 INTEGER, c2 INTEGER, c3 INTEGER, c4 INTEGER, c5 INTEGER, c6 INTEGER)");
     db.run("INSERT INTO message_fts_v4_0_content VALUES ('有人知道这个吗', 9, 1, 1, 1, 1, 1700000400)");
+  });
+
+  exec(join(DB, "message/media_0.db"), (db) => {
+    db.run("CREATE TABLE Name2Id (rowid INTEGER PRIMARY KEY, user_name TEXT)");
+    db.run("CREATE TABLE VoiceInfo (chat_name_id INTEGER, create_time INTEGER, local_id INTEGER, svr_id INTEGER, voice_data BLOB, data_index INTEGER)");
+    db.run("INSERT INTO Name2Id VALUES (1, ?)", [GROUP]);
+    const silk = Buffer.concat([Buffer.from([0x02]), Buffer.from("#!SILK_V3", "latin1"), Buffer.alloc(64, 1)]);
+    db.run("INSERT INTO VoiceInfo VALUES (1, 1700000400, 42, 9001, ?, 0)", [silk]);
   });
 
   exec(join(DB, "message/message_resource.db"), (db) => {
@@ -230,6 +241,50 @@ describe("端到端（合成明文库）", () => {
       expect(report.format).toBe("jpg");
       expect(report.decoder).toBe("v1");
       expect(readFileSync(outPath).equals(JPEG)).toBe(true);
+    } finally {
+      ctx.close();
+    }
+  });
+
+  test("timeline：跨会话按时间合并", () => {
+    const ctx = loadCtx(ACCOUNT);
+    try {
+      const { messages } = timeline(ctx, { limit: 10 });
+      expect(messages.map((m) => m.local_id)).toEqual([4, 3, 2, 1]);
+      const times = messages.map((m) => m.timestamp);
+      expect([...times].sort((a, b) => b - a)).toEqual(times);
+      expect(messages.every((m) => m.chat === GROUP)).toBe(true);
+      expect(messages[0]!.chat_display).toBe(GROUP_NAME);
+    } finally {
+      ctx.close();
+    }
+  });
+
+  test("watch：pollOnce 只返回水位之后的消息", () => {
+    const ctx = loadCtx(ACCOUNT);
+    try {
+      const state = new Map(
+        [...readSessions(ctx)].map(([k, v]) => [k, { last: 1700000050, unread: v.unread }]),
+      );
+      const { rows, changed } = pollOnce(ctx, state, { limit: 20 });
+      expect(rows.map((r) => r.local_id)).toEqual([3, 4]);
+      expect(changed).toContain(GROUP);
+    } finally {
+      ctx.close();
+    }
+  });
+
+  test("media：语音列表与 silk 导出", () => {
+    const ctx = loadCtx(ACCOUNT);
+    try {
+      const { voices } = listVoice(ctx, GROUP_NAME, { limit: 10 });
+      expect(voices).toHaveLength(1);
+      expect(voices[0]!.size).toBeGreaterThan(10);
+      const out = join(ROOT, "v.silk");
+      const r = extractVoice(ctx, voices[0]!.attachment_id, out, { overwrite: true });
+      expect(r.format).toBe("silk");
+      const buf = readFileSync(out);
+      expect(buf.subarray(0, 10).toString("latin1")).toBe("\u0002#!SILK_V3");
     } finally {
       ctx.close();
     }

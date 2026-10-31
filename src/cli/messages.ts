@@ -37,7 +37,7 @@ export type ListOptions = {
   msgType?: string;
 };
 
-const TYPE_FILTER: Record<string, number[]> = {
+export const TYPE_FILTER: Record<string, number[]> = {
   text: [1],
   image: [3],
   voice: [34],
@@ -48,7 +48,7 @@ const TYPE_FILTER: Record<string, number[]> = {
   system: [10000],
 };
 
-function id2uOf(db: Database): Map<number, string> {
+export function id2uOf(db: Database): Map<number, string> {
   const out = new Map<number, string>();
   if (!tableExists(db, "Name2Id")) return out;
   try {
@@ -87,7 +87,7 @@ function senderOf(
   };
 }
 
-function rowToMsg(
+export function rowToMsg(
   ctx: Ctx,
   chat: string,
   isGroup: boolean,

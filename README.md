@@ -60,11 +60,15 @@ wx history "张三" -n 200                # 聊天记录
 wx history "AI群" --since 2026-04-01 --until 2026-04-15 --type image
 wx search "关键词" --in "工作群"         # 全库搜索（message_fts + 分片回退）
 wx stats "AI群"                        # 总量、时间跨度、发言排行、类型分布
+wx timeline --since 2026-10-01 -n 100  # 跨会话时间线（--after/--before 翻页、--type 过滤）
+wx watch --interval 1500               # 实时监听新消息（NDJSON，Ctrl-C 退出；--once 单次）
 wx export "张三" -f markdown -o chat.md # markdown / json / jsonl
 wx contacts --query 李
 wx members "AI群"                      # 群成员（含 is_owner）
 wx attachments "AI群" -n 50            # 图片附件 → attachment_id
 wx extract <attachment_id> -o a.jpg    # 解出原图（V1 / V2 / legacy XOR）
+wx media "AI群" -n 20                  # 语音列表
+wx media extract <id> -o a.silk --wav  # 导出语音（--wav 需先装 silk-v3-decoder）
 wx sns-feed --user 张三 --since 2026-01-01
 wx sns-search 婚礼
 wx sns-notifications                   # 点赞/评论通知（--include-read）
@@ -121,6 +125,8 @@ wx favorites --type article --query 关键词
 | `database disk image is malformed` | 解密参数不对（多为 reserve 字节被清零）：更新代码后删缓存重跑 |
 | `database disk image is malformed`（sns/biz） | 同上，删除 `~/.wx-cli/cache` 后重试 |
 | `attachments` 里 `dat_path` 为 null | 图片未被微信下载过，或 `message_resource.db` 密钥过期 → `wx key repair` |
+| `media` 列表为空 | 该会话没有语音，或 `message/media_0.db` 缺密钥（`wx doctor` 看覆盖） |
+| `media extract --wav` 报缺解码器 | 装 [silk-v3-decoder](https://github.com/kn007/silk-v3-decoder)；不加 `--wav` 则直接落 `.silk` |
 | `extract` 报需要 image AES key | 该图是 V2 格式但 `kvcomm` 里没有可用 uin：先用 `--image-key <32hex[:xorhex]>` 手工指定 |
 | 读文件/`ls` 长时间挂住 | 可能有被调试器卡住的微信进程占着容器：先 `kill -9` 它，或重启微信 |
 

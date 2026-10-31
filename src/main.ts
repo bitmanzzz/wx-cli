@@ -10,11 +10,14 @@ import { matchKeyToDb } from "./core/crypto.ts";
 import { repairKeys, passphrasesFromLog } from "./core/kdf.ts";
 import { loadCtx, type Ctx } from "./core/ctx.ts";
 import { listContacts, listMembers, listSessions, sessionsMeta } from "./cli/lists.ts";
-import { chatStats, listMessages, searchMessages } from "./cli/messages.ts";
+import { chatStats, listMessages, searchMessages, TYPE_FILTER } from "./cli/messages.ts";
 import { exportChat, type ExportFormat } from "./cli/export.ts";
 import { newMessages } from "./cli/newmessages.ts";
 import { extractAttachment, listAttachments } from "./cli/media.ts";
 import { bizArticles, favorites, snsFeed, snsNotifications, snsSearch } from "./cli/extras.ts";
+import { timeline } from "./cli/timeline.ts";
+import { pollOnce, readSessions, watchLoop } from "./cli/watch.ts";
+import { extractVoice, listVoice } from "./cli/voice.ts";
 import { parseTimeArg } from "./core/format.ts";
 
 const HELP = `wx — 本地微信数据 CLI（macOS / 微信 4.x）
@@ -33,6 +36,8 @@ const HELP = `wx — 本地微信数据 CLI（macOS / 微信 4.x）
   wx history <会话>           聊天记录（-n / --since / --until / --type）
   wx search <关键词>          全库搜索（--in <会话>）
   wx stats <会话>             聊天统计
+  wx timeline                 跨会话时间线（--since/--until/--type）
+  wx watch                    实时监听新消息（NDJSON，Ctrl-C 退出）
   wx export <会话>            导出（-f markdown|json|jsonl -o 文件）
 
 通讯录
@@ -42,6 +47,8 @@ const HELP = `wx — 本地微信数据 CLI（macOS / 微信 4.x）
 附件
   wx attachments <会话>       图片附件列表
   wx extract <attachment_id> -o 输出路径
+  wx media <会话>             语音列表
+  wx media extract <id> -o a.silk [--wav]
 
 朋友圈 / 公众号 / 收藏
   wx sns-feed / sns-search <关键词> / sns-notifications
@@ -222,6 +229,62 @@ async function main() {
           inChat: flagStr(args, "in"),
         });
         print({ keyword: kw, count: hits.length, source, results: hits, meta: meta(ctx) });
+        return;
+      }
+      case "timeline": {
+        const types = flagStr(args, "type") ? (TYPE_FILTER[flagStr(args, "type")!] ?? []) : [];
+        const data = timeline(ctx, {
+          limit: limit || 50,
+          offset: flagNum(args, "offset", 0),
+          since,
+          until,
+          before: parseTimeArg(flagStr(args, "before")),
+          after: parseTimeArg(flagStr(args, "after")),
+          msgType: types,
+          sessionsCap: flagNum(args, "sessions-cap", 200),
+          perChat: flagNum(args, "per-chat", 0) || undefined,
+        });
+        print({ count: data.messages.length, messages: data.messages, meta: { ...data.meta, ...meta(ctx, { windowed: Boolean(since || until || flagNum(args, "offset", 0) > 0) }) } });
+        return;
+      }
+      case "watch": {
+        if (flagBool(args, "once")) {
+          const cutoff = (since ?? Math.floor(Date.now() / 1000) - 60) - 1;
+          const state = new Map(
+            [...readSessions(ctx)].map(([k, v]) => [k, { last: cutoff, unread: v.unread }]),
+          );
+          const { rows } = pollOnce(ctx, state, { limit: limit || 50 });
+          print({ since: cutoff + 1, count: rows.length, messages: rows });
+          return;
+        }
+        console.error(`监听中（间隔 ${flagNum(args, "interval", 1500)}ms），Ctrl-C 退出`);
+        await watchLoop(ctx, {
+          interval: flagNum(args, "interval", 1500),
+          limit: limit || 50,
+          since,
+        });
+        return;
+      }
+      case "media": {
+        const sub = args._[1];
+        if (sub === "extract") {
+          const id = args._[2];
+          const out = flagStr(args, "out");
+          if (!id || !out) die("用法: wx media extract <attachment_id> -o 输出路径 [--wav]");
+          print(
+            extractVoice(ctx, id, out, {
+              overwrite: flagBool(args, "overwrite"),
+              wav: flagBool(args, "wav"),
+            }),
+          );
+          return;
+        }
+        const chat = args._[1];
+        if (!chat) die("用法: wx media <会话>");
+        print({
+          ...listVoice(ctx, chat, { limit: limit || 50, since, until }),
+          meta: meta(ctx),
+        });
         return;
       }
       case "stats": {

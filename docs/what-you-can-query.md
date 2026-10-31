@@ -35,6 +35,9 @@
 | 只找图片 / 链接 / 文件 / 语音 | `wx history "AI群" --type image\|link\|file\|voice` |
 | 关键词在哪儿出现过 | `wx search "合同"`、`wx search "合同" --in "客户群"` |
 | 群里谁最活跃、都发什么 | `wx stats "AI群"` |
+| 今天所有会话里都发生了啥 | `wx timeline --since 2026-10-31 -n 200` |
+| 有新消息就推给我 | `wx watch --interval 1500`（每行一条 JSON，可管道给 `jq`） |
+| 语音消息 | `wx media "AI群"` → `wx media extract <id> -o a.silk` |
 | 把一段对话存档 | `wx export "张三" -f markdown -o chat.md` |
 | 通讯录、标签、群主 | `wx contacts --query 李`、`wx members "AI群"` |
 | 聊天里的原图 | `wx attachments "AI群" -n 50` → `wx extract <attachment_id> -o a.jpg` |
@@ -127,6 +130,26 @@
 { "username": "wxid_xxx", "contactDisplay": "李四", "groupNickname": "", "isOwner": false }
 ```
 
+### timeline / watch / media
+
+```json
+// wx timeline
+{ "timestamp": 1793262014, "chat": "wxid_xxx", "chat_display": "张三",
+  "chat_type": "private", "sender": "张三", "content": "在吗" }
+
+// wx watch（NDJSON，一行一条）
+{"timestamp":1793262014,"chat":"…","chat_display":"…","content":"…"}
+
+// wx media
+{ "attachment_id": "eyJ2Ijox…", "kind": "voice", "local_id": 51575,
+  "timestamp": 1748586833, "size": 4963, "data_index": 0 }
+```
+
+- `timeline` 只合并 `message_N.db`（普通会话）；公众号文章走 `biz-articles`，不混进时间线
+- `timeline --after <时间>` 向新翻页、`--before <时间>` 向旧翻页
+- `watch` 轮询 `session.db` 的 `last_timestamp`，间隔默认 1500ms；`--once` 适合 cron
+- `media` 导出的是 **SILK v3**（`\x02#!SILK_V3` 头）；`--wav` 需要本机有 `silk-v3-decoder`
+
 ### 朋友圈 / 公众号 / 收藏
 
 - `sns-feed`：`tid`(字符串)、`author`、`content`、`timestamp`、`location`、`media[]`（含 `url`/`thumb`/`md5`/`key`/`token`/`width`/`height`）
@@ -157,6 +180,16 @@ wx history "客户群" --type file -n 500 | jq -r '.messages[] | select(.type_id
 mkdir -p imgs && wx attachments "客户群" -n 50 | jq -r '.attachments[].attachment_id' \
   | while read -r id; do wx extract "$id" -o "imgs/$id.jpg" --overwrite; done
 
+# 跨会话时间线：最近 200 条，只看文本和链接
+wx timeline -n 200 --since 2026-10-01 --type link
+
+# 实时监听，只打印群消息标题
+wx watch | jq -r 'select(.chat_type=="group") | "\(.time)  \(.chat_display)  \(.content[:60])"'
+
+# 导出某人最近 20 条语音
+mkdir -p voice && wx media "张三" -n 20 | jq -r '.voices[].attachment_id' \
+  | while read -r id; do wx media extract "$id" -o "voice/$id.silk" --overwrite; done
+
 # 每天的新消息（配合 cron：状态文件会自动推进）
 wx new-messages | jq -r '.messages[] | "\(.time)  \(.chat_display)  \(.content[:60])"'
 
@@ -175,7 +208,8 @@ wx biz-articles -n 500 | jq -r '.articles[] | select(.title|test("大促")) | "\
 | 撤回消息的原文 | 只保留 `[撤回]` 提示 |
 | 朋友圈 | 只有本机刷到过的帖子；互动通知依赖本机记录 |
 | 公众号 | 只有推送历史，正文需按 `url` 自行抓取 |
-| 语音转文字 | 不提供；语音文件可通过 `media_0.db` 的 `VoiceInfo` 定位 |
+| 语音转文字 | 不提供；`wx media` 只能导出 SILK 原始音频 |
+| 公众号文章进 timeline | 不含：它们在 `biz_message_N.db`，用 `wx biz-articles` 查 |
 | 群昵称 | 4.2 的 `chat_room.ext_buffer` 已不含昵称字段，回退到通讯录显示名 |
 | 另一台设备/另一个账号 | 密钥按机器与账号隔离，需各自取钥 |
 
