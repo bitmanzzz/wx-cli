@@ -212,6 +212,15 @@ export function searchMessages(
   const limit = opts.limit ?? 100;
   const pattern = `%${keyword}%`;
   const hits: SearchHit[] = [];
+  // --in 允许传备注名/昵称，统一解析成 username
+  let inChat = opts.inChat;
+  if (inChat) {
+    try {
+      inChat = resolveChat(ctx, inChat)?.username ?? inChat;
+    } catch {
+      // 名字不唯一时保留原样，交给下面的比较逻辑
+    }
+  }
 
   const fts = ctx.db("message/message_fts.db");
   let source = "shards";
@@ -242,8 +251,7 @@ export function searchMessages(
           if (opts.since && r.c6 < opts.since) continue;
           if (opts.until && r.c6 > opts.until) continue;
           const chat = sessionIdToChat.get(r.c4) ?? "";
-          if (opts.inChat && !(chat === opts.inChat || ctx.names.display(chat) === opts.inChat))
-            continue;
+          if (inChat && chat !== inChat) continue;
           hits.push({
             timestamp: r.c6,
             time: fmtTime(r.c6),
@@ -272,8 +280,7 @@ export function searchMessages(
       for (const { name } of tables) {
         const chat =
           ctx.names.usernameOfMd5(name.slice(4)) ?? name;
-        if (opts.inChat && !chat.includes(opts.inChat) && ctx.names.display(chat) !== opts.inChat)
-          continue;
+        if (inChat && chat !== inChat) continue;
         const rows = db
           .query<
             {

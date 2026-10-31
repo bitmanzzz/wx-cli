@@ -49,6 +49,8 @@ wx doctor          # status: ok 即成功
 
 ## 4. 命令
 
+完整的「能查到什么、字段含义、查询配方」见 **[docs/what-you-can-query.md](docs/what-you-can-query.md)**。
+
 ```bash
 wx doctor                              # 环境 / 密钥覆盖 / 缓存
 wx sessions -n 20                      # 最近会话（--filter private,group）

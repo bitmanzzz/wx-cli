@@ -57,13 +57,14 @@ const HELP = `wx — 本地微信数据 CLI（macOS / 微信 4.x）
 type MetaOptions = {
   chatLatest?: number | null;
   chatLatestDb?: string | null;
+  chatUsername?: string | null;
   windowed?: boolean;
 };
 
 function meta(ctx: Ctx, opts: MetaOptions = {}) {
   const dbs = ctx.dbs;
   const unknown = ctx.unknownShards();
-  const { session_last_timestamp } = sessionsMeta(ctx);
+  const { session_last_timestamp } = sessionsMeta(ctx, opts.chatUsername ?? undefined);
   const chatLatest = opts.chatLatest ?? session_last_timestamp;
   const status =
     unknown.length > 0
@@ -205,6 +206,7 @@ async function main() {
           meta: meta(ctx, {
             chatLatest: data.chat_latest_timestamp,
             chatLatestDb: data.chat_latest_db,
+            chatUsername: data.chat,
             windowed: Boolean(since || until || flagNum(args, "offset", 0) > 0 || flagStr(args, "type")),
           }),
         });

@@ -139,14 +139,20 @@ export function listMembers(ctx: Ctx, chatQuery: string) {
   return { chat: username, display: ctx.names.display(username), members };
 }
 
-export function sessionsMeta(ctx: Ctx) {
+export function sessionsMeta(ctx: Ctx, username?: string) {
   const db = ctx.db("session/session.db");
   let sessionLast: number | null = null;
   if (db) {
     try {
-      const row = db
-        .query<{ t: number | null }, []>("SELECT max(last_timestamp) AS t FROM SessionTable")
-        .get();
+      const row = username
+        ? db
+            .query<{ t: number | null }, [string]>(
+              "SELECT last_timestamp AS t FROM SessionTable WHERE username = ?1",
+            )
+            .get(username)
+        : db
+            .query<{ t: number | null }, []>("SELECT max(last_timestamp) AS t FROM SessionTable")
+            .get();
       sessionLast = row?.t ?? null;
     } catch {}
   }

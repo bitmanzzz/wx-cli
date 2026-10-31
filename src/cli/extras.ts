@@ -99,7 +99,7 @@ export type SnsMedia = {
 };
 
 export type SnsPost = {
-  tid: number;
+  tid: string;
   author: string;
   author_username: string;
   content: string;
@@ -128,7 +128,7 @@ function parseMedia(block: string): SnsMedia {
   };
 }
 
-function parsePost(tid: number, userName: string, xml: string): SnsPost {
+function parsePost(tid: string, userName: string, xml: string): SnsPost {
   const createTime = Number(extractXmlText(xml, "createTime") ?? 0);
   const author = userName || extractXmlText(xml, "username") || "";
   const nickname = extractXmlText(xml, "nickname") ?? author;
@@ -316,13 +316,20 @@ export function favorites(
     .map((r) => {
       const ts = r.update_time > 9_999_999_999 ? Math.floor(r.update_time / 1000) : r.update_time;
       const type = FAV_TYPES[r.type] ?? `type_${r.type}`;
+      const desc =
+        extractXmlText(r.content ?? "", "desc") ??
+        extractXmlText(r.content ?? "", "title") ??
+        (r.content ?? "");
+      const link = extractXmlText(r.content ?? "", "url");
       return {
         local_id: r.local_id,
         type,
         type_id: r.type,
         timestamp: ts,
         time: fmtTime(ts),
-        content: r.content ?? "",
+        content: desc.slice(0, 2000),
+        url: link || null,
+        raw_type: r.type,
         from_user: r.fromusr ?? "",
         from_chat: r.realchatname ?? "",
       };
