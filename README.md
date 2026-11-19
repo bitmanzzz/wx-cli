@@ -116,6 +116,8 @@ wx favorites --type article --query 关键词
 
 ## 8. 故障排查
 
+更细的 4.2 真机边界和权限说明见 [docs/macos-4.2-field-notes.md](docs/macos-4.2-field-notes.md)。
+
 | 现象 | 原因 / 处理 |
 |---|---|
 | `wx doctor` → status incomplete | 活跃账号有库缺钥：`sudo bash scripts/keys.sh 60`，期间点开聊天 |
@@ -124,7 +126,7 @@ wx favorites --type article --query 关键词
 | `unable to open database file` | 明文库是 WAL 头：删掉 `~/.wx-cli/cache/<账号>` 重跑（代码已自动转 rollback 模式） |
 | `database disk image is malformed` | 解密参数不对（多为 reserve 字节被清零）：更新代码后删缓存重跑 |
 | `database disk image is malformed`（sns/biz） | 同上，删除 `~/.wx-cli/cache` 后重试 |
-| `attachments` 里 `dat_path` 为 null | 图片未被微信下载过，或 `message_resource.db` 密钥过期 → `wx key repair` |
+| `attachments` 里 `dat_path` 为 null | 图片未被微信下载过，`message_resource.db` 查不到资源行，或该库不可用 → 先 `wx key repair`，再检查资源表；不要仅按时间戳猜测附件 |
 | `media` 列表为空 | 该会话没有语音，或 `message/media_0.db` 缺密钥（`wx doctor` 看覆盖） |
 | `media extract --wav` 报缺解码器 | 装 [silk-v3-decoder](https://github.com/kn007/silk-v3-decoder)；不加 `--wav` 则直接落 `.silk` |
 | `extract` 报需要 image AES key | 该图是 V2 格式但 `kvcomm` 里没有可用 uin：先用 `--image-key <32hex[:xorhex]>` 手工指定 |
